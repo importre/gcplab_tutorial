@@ -1,0 +1,277 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>GCPLab Tutorial #1 - Datastore</title>
+
+<link rel="stylesheet" href="/css/bootstrap.min.css" tyle="text/css">
+<script type="text/javascript" src="/js/jquery.1.10.2.js"></script>
+<script type="text/javascript" src="/js/jquery.cookie.js"></script>
+<script type="text/javascript" src="/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="/js/gcplab.util.js"></script>
+<script>
+	$(document).ready(function(){
+		var signedInId = $.cookie('gcplab_idStr');
+		if(signedInId){
+			$('#signedInID').text(signedInId);
+			
+			$('#postBtn').click(function(){
+				addNakSeo();
+			});
+			
+			$('#newNakSeo').keydown(function(){
+				if(event.keyCode == 13){
+					addNakSeo();
+					return false;
+				}
+			});
+			
+			$('#fetchOpt').change(function(){
+				noMore = false;
+				fetchNakSeo(true);
+			})
+			
+			fetchNakSeo(true);
+			listNakSeo = $('#listNakSeo');
+			$(window).bind('scroll', scrolled);
+			
+			$('#notSignedIn').hide();
+			$('#signedIn').show();
+		}else{
+			$('#notSignedIn').show();
+			$('#signedIn').hide();
+		}
+	});
+	
+	var listNakSeo;
+	
+	function scrolled(e) {
+	    if ($(document).scrollTop()+window.innerHeight >= $(window).innerHeight()) {
+	    	//GCPLabUtil.toast('bottom!');
+	        fetchNakSeo(false);
+	    }
+	}
+	
+	function openModal(modalID){
+		$('#'+modalID).modal('show');
+	}
+	
+	function register(){
+		$.ajax({
+			url:"/cmd/register",
+			type:"POST",
+			data:{
+				idStr : $('#signUpIdStr').val(),
+				password : $('#signUpPwd').val()
+			},
+			dataType:"json",
+			success:function(result){
+				if(result.result == 'success'){
+					$('#signUpModal').modal('hide');
+					$.cookie('gcplab_idStr', result.idStr);
+					$.cookie('gcplab_encKey', result.encKey);
+					location.href='/';
+				}else{
+					GCPLabUtil.toast('Failed to register!','error');
+				}
+			}
+		});
+	}
+	
+	function signIn(){
+		$.ajax({
+			url:"/cmd/jange",
+			type:"POST",
+			data:{
+				idStr : $('#signInIdStr').val(),
+				password : $('#signInPwd').val()
+			},
+			dataType:"json",
+			success:function(result){
+				if(result.result == 'success'){
+					$('#signInModal').modal('hide');
+					$.cookie('gcplab_idStr', result.idStr);
+					$.cookie('gcplab_encKey', result.encKey);
+					location.href='/';
+				}else{
+					GCPLabUtil.toast('Failed to sign in!','error');
+				}
+			}
+		});
+	}
+	
+	function signOut(){
+		$.removeCookie('gcplab_idStr');
+		location.href='/';
+	}
+	
+	function addNakSeo(){
+		$.ajax({
+			url:"/cmd/nakseo",
+			type:"POST",
+			data:{
+				encKey:$.cookie('gcplab_encKey'),
+				content:GCPLabUtil.encode($('#newNakSeo').val())
+			},
+			dataType:"json",
+			success:function(result){
+				if(result.result == 'success'){
+					$('#newNakSeo').val('');
+					noMore = false;
+					fetchNakSeo(true);
+				}else{
+					GCPLabUtil.toast('Failed to add your NakSeo!');
+				}
+			}
+		
+		});
+	}
+	
+	var isFetching = false;
+	var noMore = false;
+	
+	function fetchNakSeo(refresh){
+		if(isFetching) return false;
+		if(noMore){
+			return false;
+		}
+		
+		console.log('fetch!!!->'+refresh);
+		
+		isFetching = true;
+		$.ajax({
+			url:"/cmd/nakseo",
+			type:"GET",
+			data:{
+				encKey:$.cookie('gcplab_encKey'),
+				nextToken:refresh?'':$('#nextToken').val(),
+				fetch:$('#fetchOpt').val()
+			},
+			dataType:"json",
+			success:function(result){
+				if(result.result == 'success'){
+					var prevHtml = '';
+					if(!refresh){
+						prevHtml = $('#listNakSeo').html();	
+					}
+					var newHtml = '';
+					for(var i=0; i<result.nakseo.length; i++){
+						prevHtml += '<div>'+
+						'<span class=\"nakseo_content\">'+GCPLabUtil.decode(result.nakseo[i].content)+'</span>'+
+						'<span class=\"nakseo_postfix\">('+
+						'<span class=\"nakseo_owner\">'+result.nakseo[i].owner+'</span>'+
+						':'+
+						'<span class=\"nakseo_regdate\">'+result.nakseo[i].regDate+'</span>'+
+						')</span>'+
+						'</div>'
+					}
+					$('#listNakSeo').html(prevHtml+newHtml);
+					$('#nextToken').val(result.next);
+					
+				}else if(result.result == 'no_more'){
+					GCPLabUtil.toast('Fetched All!');
+					noMore = true;
+				}else{
+					GCPLabUtil.toast('Failed to fetch Nakseos!','error');
+				}
+				isFetching = false;
+				scrolled();
+			}
+		});
+	}
+	
+</script>
+<style>
+.nakseo_content{
+	margin-left:10px;
+}
+.nakseo_postfix{
+	margin-left:5px;
+	font-size:10px;
+	color:#CCCCCC;
+}
+.nakseo_regdate{
+
+}
+.nakseo_owner{
+	color:green;
+}
+</style>
+</head>
+<body>
+<div style="width:100%" id="notSignedIn" align="center">
+	GCP Lab Tutorial #1 <br>
+	<a href="javascript:openModal('signInModal');" class="btn btn-primary">Sign In</a> or <a href="javascript:openModal('signUpModal');" class="btn">Sign Up</a>
+</div>
+
+<div class="modal fade" id="signUpModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h4 class="modal-title">Sign Up!</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+		    <label for="signUpIdStr">ID</label>
+		    <input type="email" class="form-control" id="signUpIdStr" placeholder="Enter ID">
+		  </div>
+		  <div class="form-group">
+		    <label for="signUpPwd">Password</label>
+		    <input type="password" class="form-control" id="signUpPwd" placeholder="Password">
+		  </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <a href="javascript:register()" class="btn btn-primary">Sign Up</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="signInModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h4 class="modal-title">Sign In!</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+		    <label for="signInIdStr">ID</label>
+		    <input type="email" class="form-control" id="signInIdStr" placeholder="Enter ID">
+		  </div>
+		  <div class="form-group">
+		    <label for=""signInPwd"">Password</label>
+		    <input type="password" class="form-control" id="signInPwd" placeholder="Password">
+		  </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <a href="javascript:signIn()" class="btn btn-primary">Sign In</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div style="width:100%" id="signedIn">
+	<span id="signedInID" style="color:blue;font-weight:bold;"></span> is signed in.
+	<a href="javascript:signOut();" class="btn">Sign out</a> 
+	<select id="fetchOpt">
+		<option value="all">All</option>
+		<option value="mine">Mine only</option>
+	</select>
+	<br>
+	<div id="addNakSeo">
+		<div class="input-group">
+	      <input type="text" class="form-control" id="newNakSeo">
+	      <span class="input-group-btn">
+	        <button class="btn btn-default" type="button" id="postBtn">Post!</button>
+	      </span>
+	    </div>
+	</div>
+	<div id="listNakSeo"></div>
+	<input type="hidden" id="nextToken">
+</div>
+</body>
+</html>
