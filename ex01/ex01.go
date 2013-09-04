@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -208,10 +207,6 @@ func getNakseo(w http.ResponseWriter, r *http.Request) {
 	fetch := r.Form.Get("fetch")
 	next := 0
 
-	if "" != nextToken {
-		next, _ = strconv.Atoi(nextToken)
-	}
-
 	userKey, err := datastore.DecodeKey(encUserKey)
 
 	if nil != err {
@@ -232,38 +227,38 @@ func getNakseo(w http.ResponseWriter, r *http.Request) {
 	max := 10
 
 	c := appengine.NewContext(r)
-	count, err := q.Count(c)
-	if nil != err {
-		log.Println(err)
-		return
+
+	var cursor datastore.Cursor
+	if "" != nextToken {
+		cursor, _ = datastore.DecodeCursor(nextToken)
+		q = q.Start(cursor)
 	}
 
-	if count > max {
-		count = max
-	}
+	iter := q.Run(c)
+	nakseoList := make([]*Nakseo, max)
 
-	t := q.Run(c)
-	nakseoList := make([]*Nakseo, count)
-
-	for i := 0; i < count; i++ {
+	count := 0
+	for i := 0; i < max; i++ {
 		nakseo := &Nakseo{}
-		_, err := t.Next(nakseo)
+		_, err := iter.Next(nakseo)
 
 		if err == datastore.Done {
 			break
 		}
+
 		if err != nil {
 			return
 		}
 
+		cursor, _ = iter.Cursor()
 		nakseoList[i] = nakseo
+		count = i + 1
 	}
 
 	res := &NakseoResult{
 		Result:    "success",
-		Nakseo:    nakseoList,
-		Index:     "",
-		NextToken: next + count,
+		Nakseo:    nakseoList[:count],
+		NextToken: cursor.String(),
 	}
 
 	if 0 == count {
